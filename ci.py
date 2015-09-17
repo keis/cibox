@@ -49,6 +49,7 @@ def load_config(path):
 def container(client, image, workdir):
     c = client.create_container(
         image=image, command='/bin/sleep 10m', volumes=['/cibox'],
+        working_dir='/cibox',
         host_config=docker.utils.create_host_config(binds={
             workdir: {
                 'bind': '/cibox',
@@ -83,7 +84,7 @@ def fold_script(config, script, fun):
 
 def select_image(config):
     if config['language'] == 'node_js':
-        return 'cibox_nodejs'
+        return 'node'
     return 'busybox'
 
 
