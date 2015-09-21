@@ -1,0 +1,10 @@
+language: node_js
+image: node
+before_install: []
+install:
+  - 'npm install'
+before_script: []
+script: ['npm test']
+after_success: []
+after_failure: []
+after_script: []

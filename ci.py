@@ -3,23 +3,13 @@ import yaml
 import logging
 import json
 import sys
+import glob
 import os.path
 from contextlib import contextmanager
 from functools import partial
 
 logging.basicConfig(level='DEBUG')
 logger = logging.getLogger(__name__)
-
-nodejs_config = {
-    'image': 'node',
-    'before_install': [],
-    'install': ['npm install'],
-    'before_script': [],
-    'script': ['npm test'],
-    'after_success': [],
-    'after_failure': [],
-    'after_script': []
-}
 
 config_keys = (
     'before_install',
@@ -36,13 +26,24 @@ class ScriptError(Exception):
     pass
 
 
-def load_config(path):
+def create_defaults_repository(globexp):
+    defaults = {}
+
+    for f in glob.glob(globexp):
+        with open(f, 'r') as cfg:
+            config = yaml.load(cfg)
+            defaults[config['language']] = config
+
+    return defaults
+
+
+def load_config(path, defaults):
     with open(path, 'r') as cfg:
         config = yaml.load(cfg)
 
-    if config['language'] == 'node_js':
-        default_config = nodejs_config
-    else:
+    try:
+        default_config = defaults[config['language']]
+    except KeyError:
         raise Exception('Unsupported language {language}'.format(**config))
 
     config['image'] = default_config['image']
@@ -108,10 +109,15 @@ def ensure_image(client, image):
 
 
 def main():
-    pdir = os.path.dirname(sys.argv[1])
-    config = load_config(sys.argv[1])
+    configpath = sys.argv[1]
+    dockersock = sys.argv[2]
 
-    client = docker.Client(base_url=sys.argv[2])
+    defaults = create_defaults_repository('./defaults/*.yml')
+
+    pdir = os.path.dirname(configpath)
+    config = load_config(configpath, defaults)
+
+    client = docker.Client(base_url=dockersock)
     image = select_image(config)
 
     ensure_image(client, image)
