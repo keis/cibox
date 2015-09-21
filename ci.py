@@ -11,6 +11,7 @@ logging.basicConfig(level='DEBUG')
 logger = logging.getLogger(__name__)
 
 nodejs_config = {
+    'image': 'node',
     'before_install': [],
     'install': ['npm install'],
     'before_script': [],
@@ -20,7 +21,15 @@ nodejs_config = {
     'after_script': []
 }
 
-config_keys = tuple(nodejs_config.keys())
+config_keys = (
+    'before_install',
+    'install',
+    'before_script',
+    'script',
+    'after_success',
+    'after_failure',
+    'after_script'
+)
 
 
 class ScriptError(Exception):
@@ -35,6 +44,8 @@ def load_config(path):
         default_config = nodejs_config
     else:
         raise Exception('Unsupported language {language}'.format(**config))
+
+    config['image'] = default_config['image']
 
     for key in config_keys:
         val = config.get(key, default_config[key])
@@ -69,6 +80,7 @@ def execute(client, container, cmd):
     logger.info("executing %s", cmd)
     e = client.exec_create(container=container['Id'],
                            cmd=['/bin/bash', '-c', cmd])
+
     for up in client.exec_start(exec_id=e['Id'], stream=True):
         sys.stdout.write(up.decode('utf-8'))
     info = client.exec_inspect(exec_id=e['Id'])
@@ -83,9 +95,7 @@ def fold_script(config, script, fun):
 
 
 def select_image(config):
-    if config['language'] == 'node_js':
-        return 'node'
-    return 'busybox'
+    return config['image']
 
 
 def ensure_image(client, image):
