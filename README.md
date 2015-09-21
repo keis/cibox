@@ -1,6 +1,15 @@
 # cibox
 
-CI with a travis like life-cycle
+A test runner for any language. It uses docker to create a container that will
+run the tests while keeping the control flow outside. This puts minimal
+restraints on the image as does not need do anything but run the normal
+commands for the target language.
+
+cibox uses some travis idioms for convenience but full compatibility is not a
+goal.
+
+Currently this is only a *proof-of-concept* and only supports a basic nodejs
+setup. Feedback is welcome (pull requests doubly so)
 
 ## Setup
 
