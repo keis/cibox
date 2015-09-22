@@ -1,3 +1,5 @@
+'''run tests in docker container'''
+
 import docker
 import yaml
 import logging
@@ -109,15 +111,21 @@ def ensure_image(client, image):
 
 
 def main():
-    configpath = sys.argv[1]
-    dockersock = sys.argv[2]
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('config', type=argparse.FileType('r'),
+                       help='path to configuration file')
+    parser.add_argument('--docker', type=str,
+                        help='base url for docker client')
+    args = parser.parse_args()
 
     defaults = create_defaults_repository('./defaults/*.yml')
 
-    pdir = os.path.dirname(configpath)
-    config = load_config(configpath, defaults)
+    pdir = os.path.dirname(args.config.name)
+    config = load_config(args.config.name, defaults)
 
-    client = docker.Client(base_url=dockersock)
+    client = docker.Client(base_url=args.docker)
     image = select_image(config)
 
     ensure_image(client, image)
