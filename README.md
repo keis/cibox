@@ -23,7 +23,7 @@ docker build -t cibox_nodejs docker/nodejs
 ## Usage
 
 ```bash
-python ci.py /path/to/repo/.travis.yml unix:///run/docker.sock
+python ci.py /path/to/repo/.travis.yml
 ```
 
 ## Notes
