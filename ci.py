@@ -114,16 +114,26 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('config', type=argparse.FileType('r'),
-                       help='path to configuration file')
+    parser.add_argument('repository', type=str,
+                        help='path to code repository')
     parser.add_argument('--docker', type=str,
                         help='base url for docker client')
     args = parser.parse_args()
 
     defaults = create_defaults_repository('./defaults/*.yml')
 
-    pdir = os.path.dirname(args.config.name)
-    config = load_config(args.config.name, defaults)
+    pdir = args.repository
+
+    # Look for configuration by a few alternative names
+    for cname in ('.cibox.yml', '.travis.yml'):
+        try:
+            config = load_config(os.path.join(pdir, cname), defaults)
+            break
+        except FileNotFoundError as e:
+            continue
+    else:
+        print("No configuration file found in %s" % pdir, file=sys.stderr)
+        sys.exit(1)
 
     client = docker.Client(base_url=args.docker)
     image = select_image(config)
