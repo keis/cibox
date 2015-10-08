@@ -61,26 +61,41 @@ def git_checkout(url, branch):
 
     @contextmanager
     def read_file(path):
-        read = subprocess.Popen(['git', '--git-dir', gitdir,
-                                 'show', '%s:%s' % (sha, path)
-                                ],
-                                stdout=subprocess.PIPE)
-        read.wait()
-        if read.returncode != 0:
-            raise FileNotFoundError("Failed to read %s" % path)
-        yield read.stdout
+        command = ['git', '--git-dir', gitdir, 'show', '%s:%s' % (sha, path)]
+        read = subprocess.Popen(command, stdout=subprocess.PIPE)
 
+        yield process_stream(read, read.stdout, command)
 
     @contextmanager
     def archive():
-        read = subprocess.Popen(['git', '--git-dir', gitdir, 'archive', sha],
-                                stdout=subprocess.PIPE)
-        read.wait()
-        if read.returncode != 0:
-            raise FileNotFoundError("Failed to read %s" % path)
-        yield read.stdout
+        command = ['git', '--git-dir', gitdir, 'archive', sha]
+        read = subprocess.Popen(command, stdout=subprocess.PIPE)
+
+        yield process_stream(read, read.stdout, command)
 
     return read_file, archive
+
+
+class process_stream(object):
+    def __init__(self, process, stream, command_info):
+        self.process = process
+        self.stream = stream
+        self.command_info = command_info
+
+    def read(self, *args):
+        process = self.process
+        r = self.stream.read(*args)
+
+        if len(r) == 0:
+            process.wait()
+        else:
+            process.poll()
+
+        if process.returncode is not None and process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode,
+                                                self.command_info)
+
+        return r
 
 
 def load_config(read_file, defaults):
@@ -91,10 +106,10 @@ def load_config(read_file, defaults):
         try:
             with read_file(cname) as cfg:
                 return parse_config(cfg, defaults)
-        except FileNotFoundError as e:
+        except (FileNotFoundError, subprocess.CalledProcessError):
             continue
     else:
-        raise Exception("No configuration file found in %s" % pdir)
+        raise Exception("No configuration file found")
 
 
 def parse_config(stream, defaults):
