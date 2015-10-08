@@ -1,2 +1,2 @@
 PyYAML
-docker-py
+git+ssh://git@github.com/docker/docker-py@master
