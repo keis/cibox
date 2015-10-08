@@ -39,9 +39,21 @@ def create_defaults_repository(globexp):
     return defaults
 
 
-def load_config(path, defaults):
-    with open(path, 'r') as cfg:
-        config = yaml.load(cfg)
+def load_config(pdir, defaults):
+    '''Look for configuration by a few alternative names'''
+
+    for cname in ('.cibox.yml', '.travis.yml'):
+        try:
+            with open(os.path.join(pdir, cname), 'r') as cfg:
+                return parse_config(cfg, defaults)
+        except FileNotFoundError as e:
+            continue
+    else:
+        raise Exception("No configuration file found in %s" % pdir)
+
+
+def parse_config(stream, defaults):
+    config = yaml.load(stream)
 
     try:
         default_config = defaults[config['language']]
@@ -121,26 +133,14 @@ def main():
     args = parser.parse_args()
 
     defaults = create_defaults_repository('./defaults/*.yml')
-
-    pdir = args.repository
-
-    # Look for configuration by a few alternative names
-    for cname in ('.cibox.yml', '.travis.yml'):
-        try:
-            config = load_config(os.path.join(pdir, cname), defaults)
-            break
-        except FileNotFoundError as e:
-            continue
-    else:
-        print("No configuration file found in %s" % pdir, file=sys.stderr)
-        sys.exit(1)
+    config = load_config(args.repository, defaults)
 
     client = docker.Client(base_url=args.docker)
-    image = select_image(config)
 
+    image = select_image(config)
     ensure_image(client, image)
 
-    with container(client, image, pdir) as cnt:
+    with container(client, image, args.repository) as cnt:
         run = partial(execute, client, cnt)
         logger.debug("got a container %s", cnt['Id'])
 
