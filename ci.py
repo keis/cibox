@@ -73,15 +73,21 @@ def parse_config(stream, defaults):
 
 @contextmanager
 def container(client, image, workdir):
-    c = client.create_container(
-        image=image, command='/bin/sleep 10m', volumes=['/cibox'],
-        working_dir='/cibox',
-        host_config=docker.utils.create_host_config(binds={
+    if workdir is not None:
+        binds = {
             workdir: {
                 'bind': '/cibox',
                 'mode': 'rw'
             }
-        }))
+        }
+    else:
+        binds = None
+
+    c = client.create_container(
+        image=image, command='/bin/sleep 10m', volumes=['/cibox'],
+        working_dir='/cibox',
+        host_config=client.create_host_config(binds=binds))
+
     client.start(container=c['Id'])
     try:
         yield c
