@@ -17,7 +17,6 @@ setup. Feedback is welcome (pull requests doubly so)
 virtualenv --python python3.4 env
 source env/bin/activate
 pip install -r requirements.txt
-docker build -t cibox_nodejs docker/nodejs
 ```
 
 ## Usage
