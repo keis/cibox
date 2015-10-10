@@ -11,9 +11,10 @@ import subprocess
 from urllib.parse import urlparse, urlunparse
 from contextlib import contextmanager
 from functools import partial
+from collections import defaultdict
 
 logging.basicConfig(level='DEBUG')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('cibox')
 
 config_keys = (
     'before_install',
@@ -31,12 +32,14 @@ class ScriptError(Exception):
 
 
 def create_defaults_repository(globexp):
-    defaults = {}
+    defaults = defaultdict(dict)
 
     for f in glob.glob(globexp):
         with open(f, 'r') as cfg:
             config = yaml.load(cfg)
-            defaults[config['language']] = config
+            lang = config['language']
+            alt = config.get(lang, 'default')
+            defaults[lang][alt] = config
 
     return defaults
 
@@ -114,9 +117,11 @@ def load_config(read_file, defaults):
 
 def parse_config(stream, defaults):
     config = yaml.load(stream)
+    lang = config['language']
+    alt = config.get(lang, 'default')
 
     try:
-        default_config = defaults[config['language']]
+        default_config = defaults[lang][alt]
     except KeyError:
         raise Exception('Unsupported language {language}'.format(**config))
 
@@ -182,9 +187,13 @@ def ensure_image(client, image):
     try:
         client.inspect_image(image)
     except docker.errors.NotFound:
+        logger.info('pulling %s from registry', image)
         for up in client.pull(image, stream=True):
-            data = json.loads(up.decode('utf-8'))
-            print(data['status'])
+            try:
+                data = json.loads(up.decode('utf-8'))
+                print(data['status'])
+            except:
+                print(up)
 
 
 def main():
@@ -218,8 +227,9 @@ def main():
     client = docker.Client(base_url=args.docker)
 
     image = select_image(config)
-    ensure_image(client, image)
 
+    logger.info('preparing to run tests in %s', image)
+    ensure_image(client, image)
     with container(client, image, workdir) as cnt:
         if workdir is None:
             with archive() as tar:
