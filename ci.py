@@ -48,13 +48,8 @@ def git_checkout(url, branch):
     gitdir = 'cibox-git'
 
     logger.debug("looking for %s in remote repository", branch)
-    ls = subprocess.Popen(['git', 'ls-remote', url, branch],
-                          stdout=subprocess.PIPE)
-    (out, err) = ls.communicate()
-    if ls.returncode != 0:
-        raise Exception("ls-remote failed")
-
-    sha = out.decode('utf-8').split('\n')[0].strip('\n').split('\t')[0]
+    ls = pipe_process(['git', 'ls-remote', url, branch])
+    sha = ls.read().decode('utf-8').split('\n')[0].strip('\n').split('\t')[0]
 
     if not os.path.exists(gitdir):
         subprocess.check_call(['git', 'init', '--bare', gitdir])
@@ -64,19 +59,18 @@ def git_checkout(url, branch):
 
     @contextmanager
     def read_file(path):
-        command = ['git', '--git-dir', gitdir, 'show', '%s:%s' % (sha, path)]
-        read = subprocess.Popen(command, stdout=subprocess.PIPE)
-
-        yield process_stream(read, read.stdout, command)
+        yield pipe_process(['git', '--git-dir', gitdir, 'show', '%s:%s' % (sha, path)])
 
     @contextmanager
     def archive():
-        command = ['git', '--git-dir', gitdir, 'archive', sha]
-        read = subprocess.Popen(command, stdout=subprocess.PIPE)
-
-        yield process_stream(read, read.stdout, command)
+        yield pipe_process(['git', '--git-dir', gitdir, 'archive', sha])
 
     return read_file, archive
+
+
+def pipe_process(command):
+    p = subprocess.Popen(command, stdout=subprocess.PIPE)
+    return process_stream(p, p.stdout, command)
 
 
 class process_stream(object):
