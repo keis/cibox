@@ -1,0 +1,11 @@
+language: python
+python: "3.4"
+image: python:3.4
+before_install: []
+install:
+  - 'pip install .'
+before_script: []
+script: []
+after_success: []
+after_failure: []
+after_script: []
