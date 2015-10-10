@@ -21,8 +21,15 @@ pip install -r requirements.txt
 
 ## Usage
 
+build from a local directory
+
 ```bash
 python ci.py /path/to/repo/
+```
+
+or from a git repository
+```bash
+python ci.py git+ssh://git@github.com/user/repo.git#branch
 ```
 
 ## Notes
