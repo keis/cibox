@@ -7,6 +7,8 @@ import json
 import sys
 import glob
 import os.path
+import subprocess
+from urllib.parse import urlparse, urlunparse
 from contextlib import contextmanager
 from functools import partial
 
@@ -39,17 +41,75 @@ def create_defaults_repository(globexp):
     return defaults
 
 
-def load_config(pdir, defaults):
+def git_checkout(url, branch):
+    gitdir = 'cibox-git'
+
+    logger.debug("looking for %s in remote repository", branch)
+    ls = subprocess.Popen(['git', 'ls-remote', url, branch],
+                          stdout=subprocess.PIPE)
+    (out, err) = ls.communicate()
+    if ls.returncode != 0:
+        raise Exception("ls-remote failed")
+
+    sha = out.decode('utf-8').split('\n')[0].strip('\n').split('\t')[0]
+
+    if not os.path.exists(gitdir):
+        subprocess.check_call(['git', 'init', '--bare', gitdir])
+
+    logger.debug("fetching %s", sha)
+    subprocess.check_call(['git', '--git-dir', gitdir, 'fetch', url, sha])
+
+    @contextmanager
+    def read_file(path):
+        command = ['git', '--git-dir', gitdir, 'show', '%s:%s' % (sha, path)]
+        read = subprocess.Popen(command, stdout=subprocess.PIPE)
+
+        yield process_stream(read, read.stdout, command)
+
+    @contextmanager
+    def archive():
+        command = ['git', '--git-dir', gitdir, 'archive', sha]
+        read = subprocess.Popen(command, stdout=subprocess.PIPE)
+
+        yield process_stream(read, read.stdout, command)
+
+    return read_file, archive
+
+
+class process_stream(object):
+    def __init__(self, process, stream, command_info):
+        self.process = process
+        self.stream = stream
+        self.command_info = command_info
+
+    def read(self, *args):
+        process = self.process
+        r = self.stream.read(*args)
+
+        if len(r) == 0:
+            process.wait()
+        else:
+            process.poll()
+
+        if process.returncode is not None and process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode,
+                                                self.command_info)
+
+        return r
+
+
+def load_config(read_file, defaults):
     '''Look for configuration by a few alternative names'''
 
     for cname in ('.cibox.yml', '.travis.yml'):
+        logger.debug("looking for config in %s", cname)
         try:
-            with open(os.path.join(pdir, cname), 'r') as cfg:
+            with read_file(cname) as cfg:
                 return parse_config(cfg, defaults)
-        except FileNotFoundError as e:
+        except (FileNotFoundError, subprocess.CalledProcessError):
             continue
     else:
-        raise Exception("No configuration file found in %s" % pdir)
+        raise Exception("No configuration file found")
 
 
 def parse_config(stream, defaults):
@@ -87,7 +147,6 @@ def container(client, image, workdir):
         image=image, command='/bin/sleep 10m', volumes=['/cibox'],
         working_dir='/cibox',
         host_config=client.create_host_config(binds=binds))
-
     client.start(container=c['Id'])
     try:
         yield c
@@ -139,14 +198,34 @@ def main():
     args = parser.parse_args()
 
     defaults = create_defaults_repository('./defaults/*.yml')
-    config = load_config(args.repository, defaults)
+
+    read_file = None
+    workdir = None
+
+    components = urlparse(args.repository)
+    if components.scheme != '':
+        # Load from a git url
+        branch = components.fragment or 'master'
+        url = urlunparse(components[:5] + ('',))
+        read_file, archive = git_checkout(url, branch)
+    else:
+        # Load local file
+        workdir = args.repository
+        read_file = lambda path: open(os.path.join(workdir, path), 'r')
+
+    config = load_config(read_file, defaults)
 
     client = docker.Client(base_url=args.docker)
 
     image = select_image(config)
     ensure_image(client, image)
 
-    with container(client, image, args.repository) as cnt:
+    with container(client, image, workdir) as cnt:
+        if workdir is None:
+            with archive() as tar:
+                data = tar.read()
+            client.put_archive(cnt, '/cibox', data)
+
         run = partial(execute, client, cnt)
         logger.debug("got a container %s", cnt['Id'])
 
