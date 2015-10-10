@@ -55,7 +55,7 @@ def git_checkout(url, branch):
         subprocess.check_call(['git', 'init', '--bare', gitdir])
 
     logger.debug("fetching %s", sha)
-    subprocess.check_call(['git', '--git-dir', gitdir, 'fetch', url, sha])
+    subprocess.check_call(['git', '--git-dir', gitdir, 'fetch', url, branch])
 
     @contextmanager
     def read_file(path):
