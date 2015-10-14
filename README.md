@@ -1,5 +1,7 @@
 # cibox
 
+[![Build Status][travis-image]](https://travis-ci.org/keis/cibox)
+
 A test runner for any language. It uses docker to create a container that will
 run the tests while keeping the control flow outside. This puts minimal
 restraints on the image as does not need do anything but run the normal
@@ -32,6 +34,15 @@ or from a git repository
 python ci.py git+ssh://git@github.com/user/repo.git#branch
 ```
 
+## Tests
+
+There is a few rudimentary tests written for cibox which of course can be run
+by cibox so that you can test that it can test and also run the tests
+
+```bash
+python ci.py "file:///$(pwd)"
+```
+
 ## Notes
 http://docs.travis-ci.com/user/customizing-the-build/
 https://github.com/docker/docker-py
@@ -45,3 +56,5 @@ https://github.com/docker/docker-py
  - script
  - after_success / afer_failure
  - after_script
+
+[travis-image]: https://img.shields.io/travis/keis/cibox.svg?style=flat
