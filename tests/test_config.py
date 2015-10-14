@@ -1,4 +1,4 @@
-from hamcrest import assert_that, has_entry
+from hamcrest import assert_that, has_entries, has_entry, contains
 from io import StringIO
 from ci import parse_config
 
@@ -17,13 +17,21 @@ defaults = {
     }
 }
 
+defaults['python']['3.3'] = dict(defaults['python']['default'])
+defaults['python']['3.3']['image'] = 'python:3.3'
+
+defaults['python']['3.4'] = dict(defaults['python']['default'])
+defaults['python']['3.4']['image'] = 'python:3.4'
+
 
 def test_populates_with_defaults():
     raw = StringIO('language: python\n')
     config = parse_config(raw, defaults)
 
-    assert_that(config, has_entry('language', 'python'))
-    assert_that(config, has_entry('image', 'python'))
+    assert_that(config, contains(has_entries({
+        'language': 'python',
+        'image': 'python'
+    })))
 
 
 def test_config_overrides():
@@ -36,7 +44,7 @@ def test_config_overrides():
 
     config = parse_config(raw, defaults)
 
-    assert_that(config, has_entry('script', ['nosetests']))
+    assert_that(config, contains(has_entry('script', ['nosetests'])))
 
 
 def test_cant_override_image():
@@ -49,4 +57,23 @@ def test_cant_override_image():
 
     config = parse_config(raw, defaults)
 
-    assert_that(config, has_entry('image', 'python'))
+    assert_that(config, contains(has_entry('image', 'python')))
+
+
+def test_matrix_config():
+    raw = StringIO(
+        '''
+        language: python
+        python:
+          - "3.3"
+          - "3.4"
+        image: node
+        '''
+    )
+
+    config = parse_config(raw, defaults)
+
+    assert_that(config, contains(
+        has_entry('image', 'python:3.3'),
+        has_entry('image', 'python:3.4')
+    ))

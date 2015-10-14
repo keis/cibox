@@ -112,22 +112,30 @@ def load_config(read_file, defaults):
 def parse_config(stream, defaults):
     config = yaml.load(stream)
     lang = config['language']
-    alt = config.get(lang, 'default')
+    alts = config.get(lang, 'default')
 
-    try:
-        default_config = defaults[lang][alt]
-    except KeyError:
-        raise Exception('Unsupported language {language}'.format(**config))
+    if not isinstance(alts, list):
+        alts = [alts]
 
-    config['image'] = default_config['image']
+    configs = []
+    for alt in alts:
+        try:
+            default_config = defaults[lang][alt]
+        except KeyError:
+            raise Exception('Unsupported language {language}'.format(**config))
 
-    for key in config_keys:
-        val = config.get(key, default_config[key])
-        if not isinstance(val, list):
-            val = [val]
-        config[key] = val
+        aconfig = dict(config)
+        aconfig['image'] = default_config['image']
 
-    return config
+        for key in config_keys:
+            val = aconfig.get(key, default_config[key])
+            if not isinstance(val, list):
+                val = [val]
+            aconfig[key] = val
+
+        configs.append(aconfig)
+
+    return configs
 
 
 @contextmanager
@@ -198,6 +206,8 @@ def main():
                         help='path to code repository')
     parser.add_argument('--docker', type=str,
                         help='base url for docker client')
+    parser.add_argument('--matrix-id', type=int,
+                        help='sub-build of matrix build to run')
     args = parser.parse_args()
 
     defaults = create_defaults_repository('./defaults/*.yml')
@@ -217,6 +227,13 @@ def main():
         read_file = lambda path: open(os.path.join(workdir, path), 'r')
 
     config = load_config(read_file, defaults)
+
+    if args.matrix_id is None and len(config) > 1:
+        print("{} build variations specify which with --matrix-id".format(len(config)),
+              file=sys.stderr)
+        sys.exit(1)
+    else:
+        config = config[args.matrix_id or 0]
 
     client = docker.Client(base_url=args.docker)
 
