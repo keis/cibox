@@ -12,6 +12,7 @@ from urllib.parse import urlparse, urlunparse
 from contextlib import contextmanager
 from functools import partial
 from collections import defaultdict
+from itertools import product
 
 logging.basicConfig(level='DEBUG')
 logger = logging.getLogger('cibox')
@@ -109,29 +110,30 @@ def load_config(read_file, defaults):
         raise Exception("No configuration file found")
 
 
+def as_list(val):
+    if not isinstance(val, list):
+        return [val]
+    return val
+
+
 def parse_config(stream, defaults):
     config = yaml.load(stream)
     lang = config['language']
-    alts = config.get(lang, 'default')
-
-    if not isinstance(alts, list):
-        alts = [alts]
+    alts = as_list(config.get(lang, 'default'))
+    envs = as_list(config.get('environment', ''))
 
     configs = []
-    for alt in alts:
+    for alt, env in product(alts, envs):
         try:
             default_config = defaults[lang][alt]
         except KeyError:
             raise Exception('Unsupported language {language}'.format(**config))
 
-        aconfig = dict(config)
+        aconfig = dict(config, environment=env)
         aconfig['image'] = default_config['image']
 
         for key in config_keys:
-            val = aconfig.get(key, default_config[key])
-            if not isinstance(val, list):
-                val = [val]
-            aconfig[key] = val
+            aconfig[key] = as_list(config.get(key, default_config[key]))
 
         configs.append(aconfig)
 

@@ -60,7 +60,7 @@ def test_cant_override_image():
     assert_that(config, contains(has_entry('image', 'python')))
 
 
-def test_matrix_config():
+def test_matrix_config_language():
     raw = StringIO(
         '''
         language: python
@@ -76,4 +76,47 @@ def test_matrix_config():
     assert_that(config, contains(
         has_entry('image', 'python:3.3'),
         has_entry('image', 'python:3.4')
+    ))
+
+
+def test_matrix_config_environment():
+    raw = StringIO(
+        '''
+        language: python
+        environment:
+          - FOO=bar
+          - FOO=baz
+        image: node
+        '''
+    )
+
+    config = parse_config(raw, defaults)
+
+    assert_that(config, contains(
+        has_entry('environment', 'FOO=bar'),
+        has_entry('environment', 'FOO=baz')
+    ))
+
+
+def test_matrix_config_product():
+    raw = StringIO(
+        '''
+        language: python
+        python:
+          - "3.3"
+          - "3.4"
+        environment:
+          - FOO=bar
+          - FOO=baz
+        image: node
+        '''
+    )
+
+    config = parse_config(raw, defaults)
+
+    assert_that(config, contains(
+        has_entries(image='python:3.3', environment='FOO=bar'),
+        has_entries(image='python:3.3', environment='FOO=baz'),
+        has_entries(image='python:3.4', environment='FOO=bar'),
+        has_entries(image='python:3.4', environment='FOO=baz')
     ))
