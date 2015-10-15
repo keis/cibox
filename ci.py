@@ -8,6 +8,7 @@ import sys
 import glob
 import os.path
 import subprocess
+import shlex
 from urllib.parse import urlparse, urlunparse
 from contextlib import contextmanager
 from functools import partial
@@ -141,7 +142,7 @@ def parse_config(stream, defaults):
 
 
 @contextmanager
-def container(client, image, workdir):
+def container(client, image, workdir, environment):
     if workdir is not None:
         binds = {
             workdir: {
@@ -155,6 +156,7 @@ def container(client, image, workdir):
     c = client.create_container(
         image=image, command='/bin/sleep 10m', volumes=['/cibox'],
         working_dir='/cibox',
+        environment=environment,
         host_config=client.create_host_config(binds=binds))
     client.start(container=c['Id'])
     try:
@@ -243,7 +245,8 @@ def main():
 
     logger.info('preparing to run tests in %s', image)
     ensure_image(client, image)
-    with container(client, image, workdir) as cnt:
+    env = shlex.split(config['environment'])
+    with container(client, image, workdir, env) as cnt:
         if workdir is None:
             with archive() as tar:
                 data = tar.read()
