@@ -1,2 +1,2 @@
 PyYAML
-git+https://github.com/docker/docker-py.git@master
+docker-py==1.5.0
