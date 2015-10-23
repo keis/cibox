@@ -8,10 +8,12 @@ import sys
 import glob
 import os.path
 import subprocess
+import shlex
 from urllib.parse import urlparse, urlunparse
 from contextlib import contextmanager
 from functools import partial
 from collections import defaultdict
+from itertools import product
 
 logging.basicConfig(level='DEBUG')
 logger = logging.getLogger('cibox')
@@ -109,29 +111,38 @@ def load_config(read_file, defaults):
         raise Exception("No configuration file found")
 
 
+def as_list(val):
+    if not isinstance(val, list):
+        return [val]
+    return val
+
+
 def parse_config(stream, defaults):
     config = yaml.load(stream)
     lang = config['language']
-    alt = config.get(lang, 'default')
+    alts = as_list(config.get(lang, 'default'))
+    envs = as_list(config.get('environment', ''))
 
-    try:
-        default_config = defaults[lang][alt]
-    except KeyError:
-        raise Exception('Unsupported language {language}'.format(**config))
+    configs = []
+    for alt, env in product(alts, envs):
+        try:
+            default_config = defaults[lang][alt]
+        except KeyError:
+            raise Exception('Unsupported language {language}'.format(**config))
 
-    config['image'] = default_config['image']
+        aconfig = dict(config, environment=env)
+        aconfig['image'] = default_config['image']
 
-    for key in config_keys:
-        val = config.get(key, default_config[key])
-        if not isinstance(val, list):
-            val = [val]
-        config[key] = val
+        for key in config_keys:
+            aconfig[key] = as_list(config.get(key, default_config[key]))
 
-    return config
+        configs.append(aconfig)
+
+    return configs
 
 
 @contextmanager
-def container(client, image, workdir):
+def container(client, image, workdir, environment):
     if workdir is not None:
         binds = {
             workdir: {
@@ -145,6 +156,7 @@ def container(client, image, workdir):
     c = client.create_container(
         image=image, command='/bin/sleep 10m', volumes=['/cibox'],
         working_dir='/cibox',
+        environment=environment,
         host_config=client.create_host_config(binds=binds))
     client.start(container=c['Id'])
     try:
@@ -198,6 +210,8 @@ def main():
                         help='path to code repository')
     parser.add_argument('--docker', type=str,
                         help='base url for docker client')
+    parser.add_argument('--matrix-id', type=int,
+                        help='sub-build of matrix build to run')
     args = parser.parse_args()
 
     defaults = create_defaults_repository('./defaults/*.yml')
@@ -218,13 +232,21 @@ def main():
 
     config = load_config(read_file, defaults)
 
+    if args.matrix_id is None and len(config) > 1:
+        print("{} build variations specify which with --matrix-id".format(len(config)),
+              file=sys.stderr)
+        sys.exit(1)
+    else:
+        config = config[args.matrix_id or 0]
+
     client = docker.Client(base_url=args.docker)
 
     image = select_image(config)
 
     logger.info('preparing to run tests in %s', image)
     ensure_image(client, image)
-    with container(client, image, workdir) as cnt:
+    env = shlex.split(config['environment'])
+    with container(client, image, workdir, env) as cnt:
         if workdir is None:
             with archive() as tar:
                 data = tar.read()
