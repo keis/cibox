@@ -49,7 +49,7 @@ It's not only using docker it can also be run using docker as long as you
 expose the docker socket into the container
 
 ```bash
-docker run -ti dkeis/cibox https://git@github.com/keis/cibox.git
+docker run -ti -v /var/run/docker.sock:/var/run/docker.sock dkeis/cibox https://git@github.com/keis/cibox.git
 ```
 
 ## Notes
