@@ -43,6 +43,15 @@ by cibox so that you can test that it can test and also run the tests
 python ci.py "file:///$(pwd)"
 ```
 
+## Docker
+
+It's not only using docker it can also be run using docker as long as you
+expose the docker socket into the container
+
+```bash
+docker run -ti dkeis/cibox https://git@github.com/keis/cibox.git
+```
+
 ## Notes
 http://docs.travis-ci.com/user/customizing-the-build/
 https://github.com/docker/docker-py
