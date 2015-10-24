@@ -186,10 +186,6 @@ def fold_script(config, script, fun):
         fun(cmd)
 
 
-def select_image(config):
-    return config['image']
-
-
 def ensure_image(client, image):
     try:
         client.inspect_image(image)
@@ -203,50 +199,30 @@ def ensure_image(client, image):
                 print(up)
 
 
-def main():
-    import argparse
+def repository(path):
+    components = urlparse(path)
 
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('repository', type=str,
-                        help='path to code repository')
-    parser.add_argument('--docker', type=str,
-                        help='base url for docker client')
-    parser.add_argument('--matrix-id', type=int,
-                        help='sub-build of matrix build to run')
-    args = parser.parse_args()
-
-    defaults = create_defaults_repository('./defaults/*.yml')
-
-    read_file = None
-    workdir = None
-
-    components = urlparse(args.repository)
     if components.scheme != '':
         # Load from a git url
         branch = components.fragment or 'master'
         url = urlunparse(components[:5] + ('',))
-        read_file, archive = git_checkout(url, branch)
-    else:
-        # Load local file
-        workdir = args.repository
-        read_file = lambda path: open(os.path.join(workdir, path), 'r')
+        read_file, archive =  git_checkout(url, branch)
+        return (None, read_file, archive)
 
-    config = load_config(read_file, defaults)
+    # Load local file
+    return (
+        args.repository,
+        (lambda path: open(os.path.join(workdir, path), 'r')),
+        None
+    )
 
-    if args.matrix_id is None and len(config) > 1:
-        print("{} build variations specify which with --matrix-id".format(len(config)),
-              file=sys.stderr)
-        sys.exit(1)
-    else:
-        config = config[args.matrix_id or 0]
 
-    client = docker.Client(base_url=args.docker)
-
-    image = select_image(config)
-
+def run_tests(client, workdir, archive, config):
+    image = config['image']
     logger.info('preparing to run tests in %s', image)
     ensure_image(client, image)
     env = shlex.split(config['environment'])
+
     with container(client, image, workdir, env) as cnt:
         if workdir is None:
             with archive() as tar:
@@ -268,6 +244,33 @@ def main():
             fold_script(config, 'after_success', run)
 
         fold_script(config, 'after_script', run)
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('repository', type=str,
+                        help='path to code repository')
+    parser.add_argument('--docker', type=str,
+                        help='base url for docker client')
+    parser.add_argument('--matrix-id', type=int,
+                        help='sub-build of matrix build to run')
+    args = parser.parse_args()
+
+    defaults = create_defaults_repository('./defaults/*.yml')
+    workdir, read_file, archive = repository(args.repository)
+    config = load_config(read_file, defaults)
+
+    if args.matrix_id is None and len(config) > 1:
+        print("{} build variations specify which with --matrix-id".format(len(config)),
+              file=sys.stderr)
+        sys.exit(1)
+    else:
+        config = config[args.matrix_id or 0]
+
+    client = docker.Client(base_url=args.docker)
+    run_tests(client, workdir, archive, config)
 
 
 if __name__ == '__main__':
