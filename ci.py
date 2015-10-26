@@ -206,7 +206,7 @@ def repository(path):
         # Load from a git url
         branch = components.fragment or 'master'
         url = urlunparse(components[:5] + ('',))
-        read_file, archive =  git_checkout(url, branch)
+        read_file, archive = git_checkout(url, branch)
         return (None, read_file, archive)
 
     # Load local file
@@ -269,7 +269,7 @@ def main():
     else:
         config = config[args.matrix_id or 0]
 
-    client = docker.Client(base_url=args.docker)
+    client = docker.Client(base_url=args.docker, version='auto')
     run_tests(client, workdir, archive, config)
 
 
