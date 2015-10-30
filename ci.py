@@ -55,10 +55,10 @@ def git_checkout(url, branch):
     sha = ls.read().decode('utf-8').split('\n')[0].strip('\n').split('\t')[0]
 
     if not os.path.exists(gitdir):
-        subprocess.check_call(['git', 'init', '--bare', gitdir])
+        pipe_process(['git', 'init', '--bare', gitdir]).read()
 
-    logger.debug("fetching %s", sha)
-    subprocess.check_call(['git', '--git-dir', gitdir, 'fetch', url, branch])
+    logger.info("fetching %s", sha)
+    pipe_process(['git', '--git-dir', gitdir, 'fetch', url, branch]).read()
 
     @contextmanager
     def read_file(path):
@@ -72,19 +72,25 @@ def git_checkout(url, branch):
 
 
 def pipe_process(command):
-    p = subprocess.Popen(command, stdout=subprocess.PIPE)
-    return process_stream(p, p.stdout, command)
+    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return process_stream(p, p.stdout, p.stderr, command, logger)
 
 
 class process_stream(object):
-    def __init__(self, process, stream, command_info):
+    def __init__(self, process, stream, errstream, command_info, logger):
+        self.name = command_info[0]
         self.process = process
         self.stream = stream
+        self.errstream = errstream
         self.command_info = command_info
+        self.logger = logger
 
     def read(self, *args):
         process = self.process
         r = self.stream.read(*args)
+
+        for l in self.errstream.readlines(256):
+            self.logger.debug('%s! %s', self.name, l.decode('utf-8').strip('\n'))
 
         if len(r) == 0:
             process.wait()
@@ -92,6 +98,8 @@ class process_stream(object):
             process.poll()
 
         if process.returncode is not None and process.returncode != 0:
+            for l in self.errstream.readlines():
+                self.logger.debug('%s! %s', self.name, l.decode('utf-8').strip('\n'))
             raise subprocess.CalledProcessError(process.returncode,
                                                 self.command_info)
 
