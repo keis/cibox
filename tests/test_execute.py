@@ -1,4 +1,5 @@
 import mock
+import logging
 from hamcrest import assert_that
 from matchmock import called_once_with
 from ci import execute
@@ -15,7 +16,7 @@ def test_expected_client_calls():
     client.exec_start.return_value = []
     client.exec_inspect.return_value = info
 
-    execute(client, container, cmd)
+    execute(client, container, cmd, logging.getLogger('test-execute'))
 
     assert_that(
         client.exec_create,
