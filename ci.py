@@ -176,13 +176,13 @@ def container(client, image, workdir, environment):
         client.kill(container=c['Id'])
 
 
-def execute(client, container, cmd):
+def execute(client, container, cmd, logger):
     logger.info("executing %s", cmd)
     e = client.exec_create(container=container['Id'],
                            cmd=['/bin/bash', '-c', cmd])
 
     for up in client.exec_start(exec_id=e['Id'], stream=True):
-        sys.stdout.write(up.decode('utf-8'))
+        logger.info(up.decode('utf-8').strip('\n'))
     info = client.exec_inspect(exec_id=e['Id'])
     if info['ExitCode'] != 0:
         raise ScriptError("Script exited with {ExitCode}".format(**info))
@@ -218,8 +218,9 @@ def repository(path):
         return (None, read_file, archive)
 
     # Load local file
+    workdir = path
     return (
-        args.repository,
+        workdir,
         (lambda path: open(os.path.join(workdir, path), 'r')),
         None
     )
