@@ -14,7 +14,7 @@ from urllib.parse import urlparse, urlunparse
 from contextlib import contextmanager
 from functools import partial
 from collections import defaultdict
-from itertools import product
+from itertools import product, cycle
 
 logging.basicConfig(level='DEBUG')
 logger = logging.getLogger('cibox')
@@ -189,9 +189,20 @@ def execute(client, container, cmd, logger):
 
 
 def fold_script(config, script, fun):
-    logger.info("runnings script for `%s` stage", script)
+    logger.info("running script for `%s` stage", script)
+    slog = logging.getLogger('cibox.{}'.format(script))
     for cmd in config[script]:
-        fun(cmd)
+        fun(cmd, slog)
+
+
+@contextmanager
+def status_spinner():
+    def inner(message):
+        sys.stdout.write("\033[1K\r[{}] {}".format(next(s), message))
+
+    s = cycle('.oO@* ')
+    yield (inner if sys.stdout.isatty() else lambda m: None)
+    print()
 
 
 def ensure_image(client, image):
@@ -199,12 +210,14 @@ def ensure_image(client, image):
         client.inspect_image(image)
     except docker.errors.NotFound:
         logger.info('pulling %s from registry', image)
-        for up in client.pull(image, stream=True):
-            try:
-                data = json.loads(up.decode('utf-8'))
-                print(data['status'])
-            except:
-                print(up)
+        with status_spinner() as sp:
+            for up in client.pull(image, stream=True):
+                try:
+                    data = json.loads(up.decode('utf-8'))
+                    sp(data['status'])
+                except:
+                    pass
+                    print(up)
 
 
 def repository(path):
