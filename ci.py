@@ -217,7 +217,6 @@ def ensure_image(client, image):
                     sp(data['status'])
                 except:
                     pass
-                    print(up)
 
 
 def repository(path):
